@@ -1,0 +1,2900 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENAI TechMan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .truncate-text-sm {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100px;
+        }
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 2px;
+        }
+        .calendar-day-header {
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        .calendar-day {
+            text-align: center;
+            padding: 8px 4px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        .calendar-day-active {
+            background-color: #e5e7eb;
+        }
+        .week-number {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+        }
+        .task-indicator {
+            width: 8px;
+            height: 8px;
+            background-color: #4f46e5;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+        }
+        .task-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    <div id="root" class="min-h-screen p-4 sm:p-8">
+        <div class="max-w-6xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-10">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b-2 border-slate-200 dark:border-slate-700 pb-4">
+                <div class="flex items-center gap-4 mb-4 sm:mb-0">
+                    <img src="./img/logo.png" width="100px" height="100px" alt="Logotipo SENAI TechMan" class="h-24">
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">Organize, controle e otimize.</h1>
+                </div>
+                <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                    <div class="flex items-center">
+                        <label for="role-selector" class="block text-sm font-medium mr-2">Papel:</label>
+                        <select id="role-selector" class="w-28 px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100 text-sm">
+                            <option value="admin">Admin</option>
+                            <option value="tecnico">Técnico</option>
+                        </select>
+                    </div>
+                    <span id="user-id-display" class="text-xs text-slate-500 dark:text-slate-400 truncate-text-sm" title="ID do Usuário Completo: "><span id="user-id" class="font-mono text-xs"></span></span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
+                <!-- Navigation Sidebar -->
+                <div id="nav-tabs" class="col-span-1 flex flex-col space-y-2 p-4 bg-slate-100 dark:bg-slate-700 rounded-xl shadow-inner mb-6 lg:mb-0">
+                    <!-- Navigation buttons will be rendered here -->
+                </div>
+                
+                <!-- Main Content Area -->
+                <div id="page-content" class="col-span-1 lg:col-span-3">
+                    <!-- Page content will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de feedback de ação -->
+    <div id="action-feedback-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-[100]">
+        <div class="p-6 bg-white dark:bg-slate-700 rounded-xl shadow-lg text-center max-w-sm mx-auto">
+            <i id="action-icon" class="fas text-green-500 text-4xl mx-auto mb-4"></i>
+            <h3 id="action-title" class="text-xl font-bold mb-2 text-green-600 dark:text-green-400"></h3>
+            <p id="action-message" class="text-slate-600 dark:text-slate-300"></p>
+            <button id="close-action-modal" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">
+                Fechar
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit Asset Modal -->
+    <div id="edit-asset-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Editar Ativo</h3>
+            <form id="edit-asset-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full">
+                    <label for="editAssetName" class="block text-sm font-medium mb-1">Nome do Ativo</label>
+                    <input type="text" id="editAssetName" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editAssetType" class="block text-sm font-medium mb-1">Tipo</label>
+                    <input type="text" id="editAssetType" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editAssetDepartment" class="block text-sm font-medium mb-1">Departamento</label>
+                    <input type="text" id="editAssetDepartment" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-full">
+                    <label for="editAssetSerialNumber" class="block text-sm font-medium mb-1">Número de Série</label>
+                    <input type="text" id="editAssetSerialNumber" placeholder="Ex: SN-12345" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editSeverity" class="block text-sm font-medium mb-1">Severidade (1-10)</label>
+                    <input type="number" id="editSeverity" min="1" max="10" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editOccurrence" class="block text-sm font-medium mb-1">Ocorrência (1-10)</label>
+                    <input type="number" id="editOccurrence" min="1" max="10" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editDetection" class="block text-sm font-medium mb-1">Detecção (1-10)</label>
+                    <input type="number" id="editDetection" min="1" max="10" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label class="block text-sm font-medium mb-1">NPR</label>
+                    <div id="edit-rpn" class="w-full px-4 py-2 bg-slate-300 dark:bg-slate-600 rounded-lg font-semibold text-slate-900 dark:text-slate-100">1</div>
+                </div>
+                <div class="col-span-full flex justify-end space-x-4 mt-4">
+                    <button type="button" id="cancel-edit-asset" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Edit SO Modal -->
+    <div id="edit-so-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Editar Ordem de Serviço</h3>
+            <form id="edit-so-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full">
+                    <label for="editSoClient" class="block text-sm font-medium mb-1">Cliente</label>
+                    <input type="text" id="editSoClient" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-full">
+                    <label for="editSoService" class="block text-sm font-medium mb-1">Serviço</label>
+                    <input type="text" id="editSoService" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editSoEquipmentId" class="block text-sm font-medium mb-1">Equipamento</label>
+                    <select id="editSoEquipmentId" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="" disabled>Selecione um equipamento...</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editSoServiceType" class="block text-sm font-medium mb-1">Tipo de Serviço</label>
+                    <select id="editSoServiceType" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="Preventiva">Preventiva</option>
+                        <option value="Corretiva">Corretiva</option>
+                        <option value="Preditiva">Preditiva</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editSoResponsible" class="block text-sm font-medium mb-1">Técnico Responsável</label>
+                    <select id="editSoResponsible" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="" disabled selected>Selecione um profissional...</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editSoStatus" class="block text-sm font-medium mb-1">Status</label>
+                    <select id="editSoStatus" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="Aberto">Aberto</option>
+                        <option value="Em execução">Em execução</option>
+                        <option value="Concluído">Concluído</option>
+                    </select>
+                </div>
+                <div class="col-span-full">
+                    <label for="editSoExecutionDateTime" class="block text-sm font-medium mb-1">Data e Hora de Execução</label>
+                    <input type="datetime-local" id="editSoExecutionDateTime" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-full flex justify-end space-x-4 mt-4">
+                    <button type="button" id="cancel-edit-so" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Edit LTP Modal -->
+    <div id="edit-ltp-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Editar Plano Anual</h3>
+            <form id="edit-ltp-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full">
+                    <label for="editLtpPlanName" class="block text-sm font-medium mb-1">Nome do Plano</label>
+                    <input type="text" id="editLtpPlanName" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editLtpAssetId" class="block text-sm font-medium mb-1">Ativo</label>
+                    <select id="editLtpAssetId" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="" disabled>Selecione um ativo...</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editLtpResponsible" class="block text-sm font-medium mb-1">Responsável</label>
+                    <select id="editLtpResponsible" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="" disabled selected>Selecione um profissional...</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editLtpInitialWeek" class="block text-sm font-medium mb-1">Semana Inicial</label>
+                    <input type="number" id="editLtpInitialWeek" min="1" max="52" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editLtpFrequency" class="block text-sm font-medium mb-1">Periodicidade</label>
+                    <select id="editLtpFrequency" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="Semanal">Semanal</option>
+                        <option value="Mensal">Mensal</option>
+                        <option value="Trimestral">Trimestral</option>
+                        <option value="Semestral">Semestral</option>
+                        <option value="Anual">Anual</option>
+                    </select>
+                </div>
+                <div class="col-span-full flex justify-end space-x-4 mt-4">
+                    <button type="button" id="cancel-edit-ltp" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Show Weekly Tasks Modal -->
+    <div id="weekly-tasks-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-[100]">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 id="weekly-tasks-title" class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Tarefas da Semana</h3>
+            <div id="weekly-tasks-content" class="space-y-4">
+            </div>
+            <button id="close-weekly-tasks-modal" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">
+                Fechar
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit CI Modal -->
+    <div id="edit-ci-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Editar Item do Checklist</h3>
+            <form id="edit-ci-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full">
+                    <label for="editCiRequirement" class="block text-sm font-medium mb-1">Requisito do Checklist</label>
+                    <input type="text" id="editCiRequirement" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editCiStatus" class="block text-sm font-medium mb-1">Situação</label>
+                    <select id="editCiStatus" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                        <option value="Conforme">Conforme</option>
+                        <option value="Não Conforme">Não Conforme</option>
+                        <option value="Em Andamento">Em Andamento</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="editCiComments" class="block text-sm font-medium mb-1">Comentários</label>
+                    <input type="text" id="editCiComments" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editCiActions" class="block text-sm font-medium mb-1">Ações Necessárias</label>
+                    <input type="text" id="editCiActions" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-1">
+                    <label for="editCiResponsible" class="block text-sm font-medium mb-1">Responsável</label>
+                    <input type="text" id="editCiResponsible" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-full">
+                    <label for="editCiDeadline" class="block text-sm font-medium mb-1">Prazo</label>
+                    <input type="text" id="editCiDeadline" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                </div>
+                <div class="col-span-full flex justify-end space-x-4 mt-4">
+                    <button type="button" id="cancel-edit-ci" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Edit Professional Modal -->
+    <div id="edit-professional-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-lg w-full">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-600 dark:text-indigo-400">Editar Profissional</h3>
+            <form id="edit-professional-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full">
+                    <label for="editProfessionalName" class="block text-sm font-medium mb-1">Nome do Profissional</label>
+                    <input type="text" id="editProfessionalName" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                </div>
+                <div class="col-span-1">
+                    <label for="editProfessionalDepartment" class="block text-sm font-medium mb-1">Departamento</label>
+                    <input type="text" id="editProfessionalDepartment" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                </div>
+                <div class="col-span-1">
+                    <label for="editProfessionalSpecialization" class="block text-sm font-medium mb-1">Especialização</label>
+                    <select id="editProfessionalSpecialization" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required>
+                        <option value="" disabled selected>Selecione a especialização...</option>
+                        <option value="Mecânica">Mecânica</option>
+                        <option value="Elétrica">Elétrica</option>
+                        <option value="Hidráulica">Hidráulica</option>
+                        <option value="Eletrônica">Eletrônica</option>
+                    </select>
+                </div>
+                <div class="col-span-full flex justify-end space-x-4 mt-4">
+                    <button type="button" id="cancel-edit-professional" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-200 hover:bg-slate-300 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Asset Details Modal -->
+    <div id="asset-details-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-[100] hidden">
+        <div class="p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-2xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="asset-details-title" class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Detalhes do Ativo</h3>
+                <button id="close-asset-details-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="asset-details-content">
+                <!-- Content will be populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden element for PDF generation -->
+    <div id="pdf-content" class="hidden p-8" style="width: 210mm; font-family: 'Inter', sans-serif;"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        
+        let db;
+        let auth;
+        let userId;
+        let currentPage = 'tarefas';
+        let userRole = 'admin';
+        let currentEditingAssetId = null;
+        let currentEditingSoId = null;
+        let currentEditingLtpId = null;
+        let currentEditingCiId = null;
+        let currentEditingProfessionalId = null;
+
+        const workItems = new Map();
+        const assets = new Map();
+        const ltpPlans = new Map();
+        const ciChecklist = new Map();
+        const professionals = new Map();
+        const stops = new Map();
+        const assetColors = new Map();
+        const colorPalette = ['#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#EC4899', '#EF4444', '#EAB308'];
+
+        function getAssetColor(assetId) {
+            if (!assetColors.has(assetId)) {
+                const nextColorIndex = assetColors.size % colorPalette.length;
+                assetColors.set(assetId, colorPalette[nextColorIndex]);
+            }
+            return assetColors.get(assetId);
+        }
+
+        const iconMap = {
+            'Tarefas': '<i class="fas fa-calendar-days"></i>',
+            'Ativos': '<i class="fas fa-box"></i>',
+            'Planejamento Anual': '<i class="fas fa-chart-bar"></i>',
+            'Ordens de Serviço': '<i class="fas fa-file-text"></i>',
+            'Melhoria Contínua': '<i class="fas fa-clipboard-check"></i>',
+            'Pessoas': '<i class="fas fa-users"></i>',
+            'Indicadores': '<i class="fas fa-chart-line"></i>',
+            'Registrar Parada': '<i class="fas fa-pause-circle"></i>',
+            'Minhas Tarefas': '<i class="fas fa-calendar-days"></i>',
+            'Minhas OS': '<i class="fas fa-file-text"></i>'
+        };
+
+        const pages = {
+            admin: ['Tarefas', 'Ativos', 'Planejamento Anual', 'Ordens de Serviço', 'Melhoria Contínua', 'Pessoas', 'Indicadores', 'Registrar Parada'],
+            tecnico: ['Minhas Tarefas', 'Minhas OS', 'Registrar Parada']
+        };
+
+        const pageDescriptions = {
+            'tarefas': 'Gerencie e visualize todas as tarefas de manutenção em um só lugar. Acompanhe o status e atribua responsabilidades facilmente.',
+            'ativos': 'Mantenha um inventário completo dos seus equipamentos, incluindo detalhes, criticidade e histórico de manutenção.',
+            'planejamento-anual': 'Planeje a manutenção preventiva a longo prazo, definindo a frequência e o responsável por cada ativo.',
+            'ordens-de-serviço': 'Crie, edite e gerencie ordens de serviço. Gere PDFs e acompanhe o progresso de cada trabalho.',
+            'melhoria-contínua': 'Monitore a qualidade e segurança da manutenção com checklists de auditoria para identificar oportunidades de melhoria.',
+            'pessoas': 'Gerencie a equipe de manutenção, incluindo departamentos, especializações e responsabilidades de cada profissional.',
+            'indicadores': 'Visualize métricas e gráficos de desempenho para avaliar a eficiência da manutenção e a saúde dos ativos.',
+            'registrar-parada': 'Registre rapidamente paradas de manutenção, detalhando o motivo, ativo e a duração da inatividade.',
+            'minhas-tarefas': 'Acesse e gerencie suas tarefas de manutenção atribuídas, atualizando o status de cada trabalho.',
+            'minhas-os': 'Visualize e acompanhe as ordens de serviço atribuídas a você, gerando relatórios em PDF.',
+        };
+
+        function getCriticalityColor(criticality) {
+            switch (criticality.toLowerCase()) {
+                case 'alta':
+                    return 'bg-red-500';
+                case 'média':
+                    return 'bg-yellow-500';
+                case 'baixa':
+                    return 'bg-green-500';
+                default:
+                    return 'bg-gray-400';
+            }
+        }
+
+        function getSoStatusColor(status) {
+            switch (status.toLowerCase()) {
+                case 'aberto':
+                    return 'bg-red-500';
+                case 'em execução':
+                    return 'bg-yellow-500';
+                case 'concluído':
+                    return 'bg-green-500';
+                default:
+                    return 'bg-gray-400';
+            }
+        }
+
+        function getAssetNameById(id) {
+            const asset = assets.get(id);
+            return asset ? asset.name : 'Ativo Desconhecido';
+        }
+        
+        function getProfessionalNameById(id) {
+            const professional = professionals.get(id);
+            return professional ? professional.name : 'Responsável Desconhecido';
+        }
+
+        function getCriticalityFromRpn(rpn) {
+            if (rpn >= 200) return 'Alta';
+            if (rpn >= 100) return 'Média';
+            return 'Baixa';
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        async function initFirebase() {
+            try {
+            // const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            const firebaseConfig = {
+                apiKey: "AIzaSyC6vOEGc8yg5SIQM9KK5sE4VpQZm4GVJkI",
+                authDomain: "cmms-38ca0.firebaseapp.com",
+                databaseURL: "https://cmms-38ca0-default-rtdb.firebaseio.com",
+                projectId: "cmms-38ca0",
+                storageBucket: "cmms-38ca0.firebasestorage.app",
+                messagingSenderId: "1029924172596",
+                appId: "1:1029924172596:web:0294873c83dbbc9a5e2b61",
+                measurementId: "G-53BH4RS945"
+            };
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            window.firebaseStorage = getStorage(app);
+
+            // Sem autenticação: use um ID de usuário fixo ou público
+            userId = "public";
+            document.getElementById('user-id').textContent = userId;
+            document.getElementById('user-id-display').title = `ID do Usuário Completo: ${userId}`;
+            setupListeners();
+            } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            }
+        }
+
+        function setupListeners() {
+            if (!db || !userId) return;
+
+            const tasksQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'maintenance_tasks'));
+            onSnapshot(tasksQuery, (snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data(), itemType: 'Tarefa' };
+                    if (change.type === 'added' || change.type === 'modified') {
+                        workItems.set(data.id, data);
+                    } else if (change.type === 'removed') {
+                        workItems.delete(data.id);
+                    }
+                });
+                window.renderApp();
+            });
+
+            const soQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'service_orders'));
+            onSnapshot(soQuery, (snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data(), itemType: 'Ordem de Serviço', task: change.doc.data().service };
+                    if (change.type === 'added' || change.type === 'modified') {
+                        workItems.set(data.id, data);
+                    } else if (change.type === 'removed') {
+                        workItems.delete(data.id);
+                    }
+                });
+                window.renderApp();
+            });
+            
+            const stopsQuery = query(collection(db, 'artifacts', appId, 'public/data/maintenance_stops'));
+            onSnapshot(stopsQuery, (snapshot) => {
+                stops.clear();
+                snapshot.docs.forEach(doc => stops.set(doc.id, { id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            const assetsQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'assets_inventory'));
+            onSnapshot(assetsQuery, (snapshot) => {
+                assets.clear();
+                snapshot.docs.forEach(doc => assets.set(doc.id, { id: doc.id, ...doc.data() }));
+                Array.from(assets.values()).forEach(asset => getAssetColor(asset.id));
+                window.renderApp();
+            });
+
+            const ltpQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'long_term_plans'));
+            onSnapshot(ltpQuery, (snapshot) => {
+                ltpPlans.clear();
+                snapshot.docs.forEach(doc => ltpPlans.set(doc.id, { id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+            
+            const ciQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'continuous_improvement_checklist'));
+            onSnapshot(ciQuery, (snapshot) => {
+                ciChecklist.clear();
+                snapshot.docs.forEach(doc => ciChecklist.set(doc.id, { id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            const professionalsQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'professionals'));
+            onSnapshot(professionalsQuery, (snapshot) => {
+                professionals.clear();
+                snapshot.docs.forEach(doc => professionals.set(doc.id, { id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+        }
+
+        async function addTask(e) {
+            e.preventDefault();
+            const form = e.target;
+            const assetId = form.taskAssetId.value;
+            const taskName = form.taskName.value;
+            const responsible = form.taskResponsible.value;
+            const taskType = form.taskType.value;
+            const frequency = form.frequency.value;
+
+            if (!assetId || !taskName || !responsible || !frequency) return;
+            
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'maintenance_tasks'), {
+                    assetId,
+                    task: taskName,
+                    frequency,
+                    responsible,
+                    type: taskType,
+                    completed: false,
+                    createdAt: Timestamp.now(),
+                });
+                showActionFeedback('Tarefa Adicionada!', `A tarefa "${taskName}" foi adicionada com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error adding task:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao adicionar a tarefa.`, 'fa-times-circle text-red-500');
+            }
+            
+            form.reset();
+        }
+        
+        async function addStop(e) {
+            e.preventDefault();
+            const form = e.target;
+            const assetId = form.stopAssetId.value;
+            const reason = form.stopReason.value;
+            const classificacao = form.stopClassificacao.value;
+            const startDateTime = form.stopStartDateTime.value;
+            const endDateTime = form.stopEndDateTime.value;
+
+            if (!assetId || !reason || !startDateTime || !endDateTime || !classificacao) {
+                console.error("Formulário de parada incompleto.");
+                return;
+            }
+
+            const startTime = new Date(startDateTime).getTime();
+            const endTime = new Date(endDateTime).getTime();
+            const durationMs = endTime - startTime;
+            const durationHours = (durationMs / (1000 * 60 * 60)).toFixed(2);
+
+            try {
+                const docRef = await addDoc(collection(db, 'artifacts', appId, 'public/data/maintenance_stops'), {
+                    assetId,
+                    reason,
+                    classificacao,
+                    startDateTime: new Date(startDateTime),
+                    endDateTime: new Date(endDateTime),
+                    durationHours: parseFloat(durationHours),
+                    createdAt: Timestamp.now(),
+                    addedBy: userId 
+                });
+                showActionFeedback('Parada Registrada!', `A parada para o ativo "${getAssetNameById(assetId)}" foi registrada com sucesso.`, 'fa-pause-circle text-red-500');
+            } catch (error) {
+                console.error("Erro ao adicionar parada:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao registrar a parada.`, 'fa-times-circle text-red-500');
+            }
+
+            form.reset();
+        }
+
+        async function addAsset(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.assetName.value;
+            const type = form.assetType.value;
+            const department = form.assetDepartment.value;
+            const serialNumber = form.serialNumber.value;
+            const severity = parseInt(form.severity.value, 10);
+            const occurrence = parseInt(form.occurrence.value, 10);
+            const detection = parseInt(form.detection.value, 10);
+            const imageFile = form.assetImage.files[0];
+
+            if (!name || !type || !department || !serialNumber) return;
+
+            const rpn = severity * occurrence * detection;
+            const criticality = getCriticalityFromRpn(rpn);
+            
+            let imageUrl = '';
+            if (imageFile) {
+                try {
+                    const storageRef = ref(window.firebaseStorage, `assets/${userId}/${Date.now()}_${imageFile.name}`);
+                    await uploadBytes(storageRef, imageFile);
+                    imageUrl = await getDownloadURL(storageRef);
+                } catch (error) {
+                    console.error("Erro ao fazer upload da imagem:", error);
+                }
+            }
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'assets_inventory'), {
+                    name,
+                    type,
+                    department,
+                    serialNumber,
+                    severity,
+                    occurrence,
+                    detection,
+                    rpn,
+                    criticality,
+                    imageUrl,
+                    createdAt: Timestamp.now(),
+                });
+                showActionFeedback('Ativo Adicionado!', `O ativo "${name}" foi adicionado com sucesso.`, 'fa-box text-green-500');
+            } catch (error) {
+                console.error("Erro ao adicionar ativo ao Firestore:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao adicionar o ativo.`, 'fa-times-circle text-red-500');
+            }
+            
+            form.reset();
+            document.getElementById('rpn-display').textContent = '1';
+            form.severity.value = 1;
+            form.occurrence.value = 1;
+            form.detection.value = 1;
+        }
+
+        async function updateAsset(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.editAssetName.value;
+            const type = form.editAssetType.value;
+            const department = form.editAssetDepartment.value;
+            const serialNumber = form.editAssetSerialNumber.value;
+            const severity = parseInt(form.editSeverity.value, 10);
+            const occurrence = parseInt(form.editOccurrence.value, 10);
+            const detection = parseInt(form.editDetection.value, 10);
+            
+            if (!name || !type || !department || !serialNumber || !currentEditingAssetId) return;
+
+            const rpn = severity * occurrence * detection;
+            const criticality = getCriticalityFromRpn(rpn);
+
+            const assetRef = doc(db, 'artifacts', appId, 'users', userId, 'assets_inventory', currentEditingAssetId);
+            try {
+                await updateDoc(assetRef, {
+                    name,
+                    type,
+                    department,
+                    serialNumber,
+                    severity,
+                    occurrence,
+                    detection,
+                    rpn,
+                    criticality,
+                });
+                showActionFeedback('Ativo Atualizado!', `O ativo "${name}" foi atualizado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Erro ao atualizar ativo no Firestore:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao atualizar o ativo.`, 'fa-times-circle text-red-500');
+            }
+            
+            document.getElementById('edit-asset-modal').classList.add('hidden');
+        }
+
+        window.deleteAsset = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'assets_inventory', id));
+                showActionFeedback('Ativo Excluído!', `O ativo foi excluído com sucesso.`, 'fa-trash-alt text-red-500');
+            } catch (error) {
+                console.error("Erro ao deletar ativo:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao excluir o ativo.`, 'fa-times-circle text-red-500');
+            }
+        };
+
+        window.editAsset = (id) => {
+            const asset = assets.get(id);
+            if (!asset) return;
+
+            currentEditingAssetId = id;
+            const form = document.getElementById('edit-asset-form');
+            form.editAssetName.value = asset.name;
+            form.editAssetType.value = asset.type;
+            form.editAssetDepartment.value = asset.department;
+            form.editAssetSerialNumber.value = asset.serialNumber;
+            form.editSeverity.value = asset.severity;
+            form.editOccurrence.value = asset.occurrence;
+            form.editDetection.value = asset.detection;
+            document.getElementById('edit-rpn').textContent = asset.rpn;
+            
+            const updateRpnDisplay = () => {
+                const sev = parseInt(form.editSeverity.value, 10);
+                const occ = parseInt(form.editOccurrence.value, 10);
+                const det = parseInt(form.editDetection.value, 10);
+                document.getElementById('edit-rpn').textContent = sev * occ * det;
+            };
+
+            form.editSeverity.oninput = updateRpnDisplay;
+            form.editOccurrence.oninput = updateRpnDisplay;
+            form.editDetection.oninput = updateRpnDisplay;
+
+            document.getElementById('edit-asset-modal').classList.remove('hidden');
+        };
+
+        window.showAssetDetailsModal = (id) => {
+            const asset = assets.get(id);
+            if (!asset) return;
+
+            const completedOrders = Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço' && item.equipmentId === id && item.status === 'Concluído');
+            const maintenanceTasks = Array.from(workItems.values()).filter(item => item.itemType === 'Tarefa' && item.assetId === id);
+
+            const detailsContent = document.getElementById('asset-details-content');
+            detailsContent.innerHTML = `
+                <div class="mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                    ${asset.imageUrl ? `<img src="${asset.imageUrl}" alt="${asset.name}" class="w-full sm:w-48 h-auto object-cover rounded-lg shadow-md mb-4 sm:mb-0">` : `<div class="w-full sm:w-48 h-32 flex items-center justify-center bg-slate-200 dark:bg-slate-700 rounded-lg shadow-md">Sem Imagem</div>`}
+                    <div>
+                        <h4 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300">${asset.name}</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Tipo:</span> ${asset.type}</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Número de Série:</span> ${asset.serialNumber}</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Departamento:</span> ${asset.department}</p>
+                    </div>
+                </div>
+                
+                <h4 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300 mt-4 mb-2">Ordens de Serviço Concluídas</h4>
+                <div class="space-y-2">
+                    ${completedOrders.length > 0 ? completedOrders.map(order => `
+                        <div class="p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                            <p class="font-semibold text-indigo-600 dark:text-indigo-400">OS N°: ${order.id.substring(0,6)}... - ${order.task}</p>
+                            <p class="text-sm text-slate-500">Responsável: ${order.responsible} | Data: ${new Date(order.executionDate.seconds * 1000).toLocaleDateString()}</p>
+                        </div>
+                    `).join('') : `<p class="text-sm text-slate-500">Nenhuma OS concluída encontrada para este ativo.</p>`}
+                </div>
+
+                <h4 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300 mt-6 mb-2">Histórico de Manutenções</h4>
+                <div class="space-y-2">
+                    ${maintenanceTasks.length > 0 ? maintenanceTasks.map(task => `
+                        <div class="p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                            <p class="font-semibold text-indigo-600 dark:text-indigo-400">${task.task}</p>
+                            <p class="text-sm text-slate-500">Tipo: ${task.type} | Responsável: ${task.responsible} | Status: ${task.completed ? 'Concluída' : 'Pendente'}</p>
+                        </div>
+                    `).join('') : `<p class="text-sm text-slate-500">Nenhuma manutenção encontrada para este ativo.</p>`}
+                </div>
+            `;
+            document.getElementById('asset-details-modal').classList.remove('hidden');
+        };
+
+        async function addLtpPlan(e) {
+            e.preventDefault();
+            const form = e.target;
+            const planName = form.ltpPlanName.value;
+            const assetId = form.ltpAssetId.value;
+            const responsible = form.ltpResponsible.value;
+            const frequency = form.ltpFrequency.value;
+            const initialWeek = parseInt(form.ltpInitialWeek.value, 10);
+
+            if (!planName || !assetId || !responsible || !frequency || !initialWeek) return;
+            
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'long_term_plans'), {
+                    planName,
+                    assetId,
+                    responsible,
+                    initialWeek,
+                    frequency,
+                    createdAt: Timestamp.now(),
+                });
+                showActionFeedback('Plano Adicionado!', `O plano anual "${planName}" foi adicionado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error adding LTP plan:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao adicionar o plano anual.`, 'fa-times-circle text-red-500');
+            }
+
+            form.reset();
+        }
+        
+        window.editLtpPlan = (id) => {
+            const plan = ltpPlans.get(id);
+            if (!plan) return;
+
+            currentEditingLtpId = id;
+            const form = document.getElementById('edit-ltp-form');
+            form.editLtpPlanName.value = plan.planName;
+            const assetSelect = form.editLtpAssetId;
+            assetSelect.innerHTML = `<option value="" disabled>Selecione um ativo...</option>${Array.from(assets.values()).map(asset => `<option value="${asset.id}" ${plan.assetId === asset.id ? 'selected' : ''}>${asset.name}</option>`).join('')}`;
+            
+            const responsibleSelect = form.editLtpResponsible;
+            responsibleSelect.innerHTML = `<option value="" disabled selected>Selecione um profissional...</option>${Array.from(professionals.values()).map(prof => `<option value="${prof.name}" ${plan.responsible === prof.name ? 'selected' : ''}>${prof.name}</option>`).join('')}`;
+            
+            form.editLtpInitialWeek.value = plan.initialWeek;
+            form.editLtpFrequency.value = plan.frequency;
+            
+            document.getElementById('edit-ltp-modal').classList.remove('hidden');
+        };
+
+        async function updateLtpPlan(e) {
+            e.preventDefault();
+            const form = e.target;
+            const planName = form.editLtpPlanName.value;
+            const assetId = form.editLtpAssetId.value;
+            const responsible = form.editLtpResponsible.value;
+            const frequency = form.editLtpFrequency.value;
+            const initialWeek = parseInt(form.editLtpInitialWeek.value, 10);
+            
+            if (!planName || !assetId || !responsible || !frequency || !initialWeek || !currentEditingLtpId) return;
+            
+            const ltpRef = doc(db, 'artifacts', appId, 'users', userId, 'long_term_plans', currentEditingLtpId);
+            try {
+                await updateDoc(ltpRef, {
+                    planName,
+                    assetId,
+                    responsible,
+                    initialWeek,
+                    frequency,
+                });
+                showActionFeedback('Plano Atualizado!', `O plano anual "${planName}" foi atualizado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error updating LTP plan:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao atualizar o plano anual.`, 'fa-times-circle text-red-500');
+            }
+            
+            document.getElementById('edit-ltp-modal').classList.add('hidden');
+        }
+
+        window.deleteLtpPlan = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'long_term_plans', id));
+                showActionFeedback('Plano Excluído!', `O plano anual foi excluído com sucesso.`, 'fa-trash-alt text-red-500');
+            } catch (error) {
+                console.error("Error deleting LTP plan:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao excluir o plano anual.`, 'fa-times-circle text-red-500');
+            }
+        };
+        
+        window.generateServiceOrderFromLTP = async (plan) => {
+            if (!plan) return;
+            try {
+                const now = new Date();
+                const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
+                const executionDate = new Date(firstDayOfYear.getTime() + (plan.initialWeek - 1) * 7 * 24 * 60 * 60 * 1000);
+
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'service_orders'), {
+                    client: 'SENAI ALAGOAS',
+                    service: plan.planName,
+                    serviceType: 'Preventiva',
+                    responsible: plan.responsible,
+                    equipmentId: plan.assetId,
+                    status: 'Aberto',
+                    createdAt: Timestamp.now(),
+                    executionDate: executionDate,
+                });
+                
+                showActionFeedback('OS Gerada!', 'A Ordem de Serviço foi gerada e um e-mail de notificação foi enviado com sucesso.', 'fa-envelope text-green-500');
+            } catch (e) {
+                console.error("Error generating service order from LTP: ", e);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao gerar a Ordem de Serviço.', 'fa-times-circle text-red-500');
+            }
+        };
+
+        window.generateTaskFromLTP = async (plan) => {
+            if (!plan) return;
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'maintenance_tasks'), {
+                    assetId: plan.assetId,
+                    task: plan.planName,
+                    frequency: plan.frequency,
+                    responsible: plan.responsible,
+                    type: 'Preventiva',
+                    completed: false,
+                    createdAt: Timestamp.now(),
+                });
+                
+                showActionFeedback('Tarefa Gerada!', `A tarefa "${plan.planName}" foi gerada com sucesso e adicionada à lista de tarefas.`, 'fa-check-circle text-green-500');
+
+            } catch (e) {
+                console.error("Error generating task from LTP: ", e);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao gerar a tarefa.', 'fa-times-circle text-red-500');
+            }
+        };
+
+
+        async function addServiceOrder(e) {
+            e.preventDefault();
+            const form = e.target;
+            const client = form.soClient.value;
+            const service = form.soService.value;
+            const serviceType = form.soServiceType.value;
+            const responsible = form.soResponsible.value;
+            const equipmentId = form.soEquipmentId.value;
+            const status = form.soStatus.value;
+            const executionDateTime = form.soExecutionDateTime.value;
+
+            if (!client || !service || !serviceType || !responsible || !equipmentId || !status || !executionDateTime) return;
+            
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'service_orders'), {
+                    client,
+                    service,
+                    serviceType,
+                    responsible,
+                    equipmentId,
+                    status,
+                    createdAt: Timestamp.now(),
+                    executionDate: new Date(executionDateTime),
+                });
+                showActionFeedback('OS Gerada!', 'A Ordem de Serviço foi gerada e um e-mail de notificação foi enviado com sucesso.', 'fa-envelope text-green-500');
+            } catch (error) {
+                console.error("Error adding service order:", error);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao adicionar a Ordem de Serviço.', 'fa-times-circle text-red-500');
+            }
+            
+            form.reset();
+        }
+        
+        async function updateSo(e) {
+            e.preventDefault();
+            const form = e.target;
+            const client = form.editSoClient.value;
+            const service = form.editSoService.value;
+            const serviceType = form.editSoServiceType.value;
+            const responsible = form.editSoResponsible.value;
+            const equipmentId = form.editSoEquipmentId.value;
+            const status = form.editSoStatus.value;
+            const executionDateTime = form.editSoExecutionDateTime.value;
+
+            if (!currentEditingSoId) return;
+
+            const soRef = doc(db, 'artifacts', appId, 'users', userId, 'service_orders', currentEditingSoId);
+            try {
+                await updateDoc(soRef, {
+                    client,
+                    service,
+                    serviceType,
+                    responsible,
+                    equipmentId,
+                    status,
+                    executionDate: new Date(executionDateTime),
+                });
+                showActionFeedback('OS Atualizada!', 'A Ordem de Serviço foi atualizada com sucesso.', 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error updating service order:", error);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao atualizar a Ordem de Serviço.', 'fa-times-circle text-red-500');
+            }
+
+            document.getElementById('edit-so-modal').classList.add('hidden');
+        }
+
+        window.deleteServiceOrder = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'service_orders', id));
+                showActionFeedback('OS Excluída!', 'A Ordem de Serviço foi excluída com sucesso.', 'fa-trash-alt text-red-500');
+            } catch (error) {
+                console.error("Error deleting service order:", error);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao excluir a Ordem de Serviço.', 'fa-times-circle text-red-500');
+            }
+        };
+        
+        window.editSo = (id) => {
+            const order = workItems.get(id);
+            if (!order || order.itemType !== 'Ordem de Serviço') return;
+
+            currentEditingSoId = id;
+            const form = document.getElementById('edit-so-form');
+            form.editSoClient.value = order.client;
+            form.editSoService.value = order.task;
+            form.editSoServiceType.value = order.serviceType;
+            
+            const assetSelect = form.editSoEquipmentId;
+            assetSelect.innerHTML = `<option value="" disabled>Selecione um equipamento...</option>${Array.from(assets.values()).map(asset => `<option value="${asset.id}" ${order.equipmentId === asset.id ? 'selected' : ''}>${asset.name}</option>`).join('')}`;
+            
+            const responsibleSelect = form.editSoResponsible;
+            responsibleSelect.innerHTML = `<option value="" disabled selected>Selecione um profissional...</option>${Array.from(professionals.values()).map(prof => `<option value="${prof.name}" ${order.responsible === prof.name ? 'selected' : ''}>${prof.name}</option>`).join('')}`;
+
+            form.editSoStatus.value = order.status;
+            form.editSoExecutionDateTime.value = order.executionDate ? new Date(order.executionDate.seconds * 1000).toISOString().slice(0, 16) : '';
+
+            document.getElementById('edit-so-modal').classList.remove('hidden');
+        };
+
+        window.generatePdf = async (order) => {
+            const pdfContent = document.getElementById('pdf-content');
+            
+            const asset = assets.get(order.equipmentId) || { name: 'Desconhecido', department: 'Desconhecido', type: 'Desconhecido' };
+            
+            const html = `
+                <div class="p-8 bg-white text-slate-900 border border-slate-300 rounded-lg shadow-lg">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="text-indigo-600 font-bold text-lg">SENAI ALAGOAS</div>
+                        <div class="text-sm">Ordem de Serviço N°: ${order.id.substring(0, 6).toUpperCase()}</div>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-4 border-b-2 border-indigo-200 pb-2">Detalhes da Ordem de Serviço</h2>
+                    <div class="grid grid-cols-2 gap-4 text-sm mb-6">
+                        <div><span class="font-semibold">Cliente:</span> ${order.client}</div>
+                        <div><span class="font-semibold">Serviço:</span> ${order.task}</div>
+                        <div><span class="font-semibold">Tipo:</span> ${order.serviceType}</div>
+                        <div><span class="font-semibold">Responsável:</span> ${order.responsible}</div>
+                        <div><span class="font-semibold">Status:</span> ${order.status}</div>
+                        <div><span class="font-semibold">Data de Execução:</span> ${order.executionDate ? new Date(order.executionDate.seconds * 1000).toLocaleString() : 'N/A'}</div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4 border-b-2 border-indigo-200 pb-2">Detalhes do Ativo</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><span class="font-semibold">Nome:</span> ${asset.name}</div>
+                        <div><span class="font-semibold">Tipo:</span> ${asset.type}</div>
+                        <div><span class="font-semibold">Departamento:</span> ${asset.department}</div>
+                        <div><span class="font-semibold">NPR:</span> ${asset.rpn}</div>
+                    </div>
+                </div>
+            `;
+            pdfContent.innerHTML = html;
+            pdfContent.classList.remove('hidden');
+
+            const canvas = await html2canvas(pdfContent);
+            const imgData = canvas.toDataURL('image/png');
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210;
+            const pageHeight = 297;
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+
+            let position = 0;
+
+            doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                doc.addPage();
+                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            doc.save(`OS_${order.id.substring(0, 6)}.pdf`);
+            
+            pdfContent.classList.add('hidden');
+            pdfContent.innerHTML = '';
+        };
+
+        async function addCiChecklistItem(e) {
+            e.preventDefault();
+            const form = e.target;
+            const requirement = form.ciRequirement.value;
+            const status = form.ciStatus.value;
+            const comments = form.ciComments.value;
+            const actions = form.ciActions.value;
+            const responsible = form.ciResponsible.value;
+            const deadline = form.ciDeadline.value;
+
+            if (!requirement || !responsible || !deadline) return;
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'continuous_improvement_checklist'), {
+                    requirement,
+                    status,
+                    comments,
+                    actions,
+                    responsible,
+                    deadline,
+                    createdAt: Timestamp.now(),
+                });
+                showActionFeedback('Item Adicionado!', `O item do checklist foi adicionado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error adding CI checklist item:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao adicionar o item do checklist.`, 'fa-times-circle text-red-500');
+            }
+
+            form.reset();
+        }
+
+        async function updateCiChecklistItem(e) {
+            e.preventDefault();
+            const form = e.target;
+            const requirement = form.editCiRequirement.value;
+            const status = form.editCiStatus.value;
+            const comments = form.editCiComments.value;
+            const actions = form.editCiActions.value;
+            const responsible = form.editCiResponsible.value;
+            const deadline = form.editCiDeadline.value;
+
+            if (!currentEditingCiId) return;
+
+            const ciRef = doc(db, 'artifacts', appId, 'users', userId, 'continuous_improvement_checklist', currentEditingCiId);
+            try {
+                await updateDoc(ciRef, {
+                    requirement,
+                    status,
+                    comments,
+                    actions,
+                    responsible,
+                    deadline,
+                });
+                showActionFeedback('Item Atualizado!', `O item do checklist foi atualizado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error updating CI checklist item:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao atualizar o item do checklist.`, 'fa-times-circle text-red-500');
+            }
+
+            document.getElementById('edit-ci-modal').classList.add('hidden');
+        }
+
+        window.deleteCiChecklistItem = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'continuous_improvement_checklist', id));
+                showActionFeedback('Item Excluído!', `O item do checklist foi excluído com sucesso.`, 'fa-trash-alt text-red-500');
+            } catch (error) {
+                console.error("Error deleting CI checklist item:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao excluir o item do checklist.`, 'fa-times-circle text-red-500');
+            }
+        };
+        
+        window.editCiChecklistItem = (id) => {
+            const item = ciChecklist.get(id);
+            if (!item) return;
+
+            currentEditingCiId = id;
+            const form = document.getElementById('edit-ci-form');
+            form.editCiRequirement.value = item.requirement;
+            form.editCiStatus.value = item.status;
+            form.editCiComments.value = item.comments;
+            form.editCiActions.value = item.actions;
+            form.editCiResponsible.value = item.responsible;
+            form.editCiDeadline.value = item.deadline;
+
+            document.getElementById('edit-ci-modal').classList.remove('hidden');
+        };
+
+        async function addProfessional(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.professionalName.value;
+            const department = form.professionalDepartment.value;
+            const specialization = form.professionalSpecialization.value;
+
+            if (!name || !department || !specialization) return;
+            
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'professionals'), {
+                    name,
+                    department,
+                    specialization,
+                    createdAt: Timestamp.now(),
+                });
+                showActionFeedback('Profissional Adicionado!', `O profissional "${name}" foi adicionado com sucesso.`, 'fa-user-plus text-green-500');
+            } catch (error) {
+                console.error("Error adding professional:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao adicionar o profissional.`, 'fa-times-circle text-red-500');
+            }
+
+            form.reset();
+        }
+
+        async function updateProfessional(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.editProfessionalName.value;
+            const department = form.editProfessionalDepartment.value;
+            const specialization = form.editProfessionalSpecialization.value;
+
+            if (!name || !department || !specialization || !currentEditingProfessionalId) return;
+
+            const professionalRef = doc(db, 'artifacts', appId, 'users', userId, 'professionals', currentEditingProfessionalId);
+            try {
+                await updateDoc(professionalRef, {
+                    name,
+                    department,
+                    specialization,
+                });
+                showActionFeedback('Profissional Atualizado!', `O profissional "${name}" foi atualizado com sucesso.`, 'fa-check-circle text-green-500');
+            } catch (error) {
+                console.error("Error updating professional:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao atualizar o profissional.`, 'fa-times-circle text-red-500');
+            }
+            
+            document.getElementById('edit-professional-modal').classList.add('hidden');
+        }
+
+        window.deleteProfessional = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'professionals', id));
+                showActionFeedback('Profissional Excluído!', `O profissional foi excluído com sucesso.`, 'fa-trash-alt text-red-500');
+            } catch (error) {
+                console.error("Error deleting professional:", error);
+                showActionFeedback('Erro!', `Ocorreu um erro ao excluir o profissional.`, 'fa-times-circle text-red-500');
+            }
+        };
+        
+        window.editProfessional = (id) => {
+            const professional = professionals.get(id);
+            if (!professional) return;
+
+            currentEditingProfessionalId = id;
+            const form = document.getElementById('edit-professional-form');
+            form.editProfessionalName.value = professional.name;
+            form.editProfessionalDepartment.value = professional.department;
+            form.editProfessionalSpecialization.value = professional.specialization;
+            
+            document.getElementById('edit-professional-modal').classList.remove('hidden');
+        };
+
+        window.toggleCompletion = async (id, currentStatus, itemType) => {
+            try {
+                if (itemType === 'Ordem de Serviço') {
+                    const soRef = doc(db, 'artifacts', appId, 'users', userId, 'service_orders', id);
+                    await updateDoc(soRef, {
+                        status: currentStatus ? 'Aberto' : 'Concluído',
+                    });
+                    showActionFeedback('Status Atualizado!', 'O status da Ordem de Serviço foi atualizado.', 'fa-check-circle text-green-500');
+                } else {
+                    const taskRef = doc(db, 'artifacts', appId, 'users', userId, 'maintenance_tasks', id);
+                    await updateDoc(taskRef, {
+                        completed: !currentStatus,
+                    });
+                    showActionFeedback('Status Atualizado!', 'O status da tarefa foi atualizado.', 'fa-check-circle text-green-500');
+                }
+            } catch (e) {
+                console.error("Error updating document: ", e);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao atualizar o status.', 'fa-times-circle text-red-500');
+            }
+        };
+
+        window.deleteWorkItem = async (id, itemType) => {
+            try {
+                if (itemType === 'Ordem de Serviço') {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'service_orders', id));
+                } else if (itemType === 'Tarefa') {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'maintenance_tasks', id));
+                }
+                showActionFeedback('Item Excluído!', 'O item de trabalho foi excluído com sucesso.', 'fa-trash-alt text-red-500');
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+                showActionFeedback('Erro!', 'Ocorreu um erro ao excluir o item.', 'fa-times-circle text-red-500');
+            }
+        };
+        
+        window.showWeeklyTasks = (week) => {
+            const weeklyTasksModal = document.getElementById('weekly-tasks-modal');
+            const weeklyTasksTitle = document.getElementById('weekly-tasks-title');
+            const weeklyTasksContent = document.getElementById('weekly-tasks-content');
+
+            weeklyTasksTitle.textContent = `Tarefas da Semana ${week}`;
+            
+            const tasks = Array.from(ltpPlans.values()).filter(plan => {
+                let interval;
+                switch (plan.frequency) {
+                    case 'Semanal': interval = 1; break;
+                    case 'Mensal': interval = 4; break;
+                    case 'Trimestral': interval = 13; break;
+                    case 'Semestral': interval = 26; break;
+                    case 'Anual': interval = 52; break;
+                    default: return false;
+                }
+                const now = new Date();
+                const startOfYear = new Date(now.getFullYear(), 0, 1);
+                const currentWeek = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+                return (week - plan.initialWeek) % interval === 0 && week >= plan.initialWeek;
+            });
+
+            if (tasks.length > 0) {
+                weeklyTasksContent.innerHTML = tasks.map(plan => `
+                    <div class="p-4 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center gap-2">
+                        <span class="task-dot" style="background-color: ${getAssetColor(plan.assetId)};"></span>
+                        <div>
+                            <p class="font-bold text-indigo-600 dark:text-indigo-400">${plan.planName}</p>
+                            <p class="text-sm">Ativo: ${getAssetNameById(plan.assetId)}</p>
+                            <p class="text-sm">Responsável: ${plan.responsible}</p>
+                            <div class="flex space-x-2 mt-2">
+                                <button onclick="window.generateServiceOrderFromLTP(JSON.parse(atob('${btoa(JSON.stringify(plan))}')))" class="px-4 py-1 bg-green-500 text-white rounded-full text-xs hover:bg-green-600 transition-colors">
+                                    Gerar OS
+                                </button>
+                                <button onclick="window.generateTaskFromLTP(JSON.parse(atob('${btoa(JSON.stringify(plan))}')))" class="px-4 py-1 bg-indigo-500 text-white rounded-full text-xs hover:bg-indigo-600 transition-colors">
+                                    Gerar Tarefa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                weeklyTasksContent.innerHTML = `<p class="text-slate-500 dark:text-slate-400">Nenhuma tarefa agendada para esta semana.</p>`;
+            }
+            weeklyTasksModal.classList.remove('hidden');
+        };
+
+        function showActionFeedback(title, message, iconClass) {
+            const actionFeedbackModal = document.getElementById('action-feedback-modal');
+            const actionTitle = document.getElementById('action-title');
+            const actionMessage = document.getElementById('action-message');
+            const actionIcon = document.getElementById('action-icon');
+
+            actionTitle.textContent = title;
+            actionMessage.textContent = message;
+            actionIcon.className = `fas ${iconClass} text-4xl mx-auto mb-4`;
+            
+            actionFeedbackModal.classList.remove('hidden');
+        }
+
+        window.renderNav = () => {
+            const navTabs = document.getElementById('nav-tabs');
+            navTabs.innerHTML = '';
+            const navPages = pages[userRole];
+            navPages.forEach(page => {
+                const button = document.createElement('button');
+                button.className = `w-full px-4 py-3 text-left rounded-lg font-semibold transition-all duration-200 shadow-md flex items-center justify-start gap-3 ${currentPage === page.toLowerCase().replace(/\s/g, '-') ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`;
+                button.innerHTML = `${iconMap[page]} <span>${page}</span>`;
+                button.onclick = () => {
+                    currentPage = page.toLowerCase().replace(/\s/g, '-');
+                    window.renderApp();
+                };
+                navTabs.appendChild(button);
+            });
+        };
+
+        window.renderTasksPage = () => {
+            const pageContent = document.getElementById('page-content');
+            const openServiceOrders = Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço' && item.status === 'Aberto');
+            const executedServiceOrders = Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço' && item.status === 'Concluído');
+            
+            const openOrdersByAsset = {};
+            openServiceOrders.forEach(order => {
+                const assetName = getAssetNameById(order.equipmentId);
+                openOrdersByAsset[assetName] = (openOrdersByAsset[assetName] || 0) + 1;
+            });
+            const openChartLabels = Object.keys(openOrdersByAsset);
+            const openChartData = Object.values(openOrdersByAsset);
+
+            const executedOrdersByAsset = {};
+            executedServiceOrders.forEach(order => {
+                const assetName = getAssetNameById(order.equipmentId);
+                executedOrdersByAsset[assetName] = (executedOrdersByAsset[assetName] || 0) + 1;
+            });
+            const executedChartLabels = Object.keys(executedOrdersByAsset);
+            const executedChartData = Object.values(executedOrdersByAsset);
+
+            let chartsHtml = '';
+            if (openChartLabels.length > 0 || executedChartLabels.length > 0) {
+                chartsHtml = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="p-6 bg-slate-50 dark:bg-slate-700 rounded-xl shadow-inner">
+                            <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Ordens de Serviço em Aberto</h3>
+                            <div class="flex justify-center h-80">
+                                <canvas id="os-open-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="p-6 bg-slate-50 dark:bg-slate-700 rounded-xl shadow-inner">
+                            <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Ordens de Serviço Executadas</h3>
+                            <div class="flex justify-center h-80">
+                                <canvas id="os-executed-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                chartsHtml = `
+                    <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                        Nenhuma ordem de serviço para exibir nos gráficos.
+                    </div>
+                `;
+            }
+
+            const allTasksAndOrders = Array.from(workItems.values());
+
+            const formHtml = `
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400">Tarefas de Manutenção</h2>
+                </div>
+            `;
+            
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+            ` + chartsHtml + formHtml + `
+                <div class="divide-y divide-slate-200 dark:divide-slate-700" id="task-list">
+                    ${allTasksAndOrders.length > 0 ? allTasksAndOrders.map(item => `
+                        <div class="flex items-center justify-between py-4 px-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200">
+                            <div class="flex-1 min-w-0 pr-4">
+                                <div class="font-bold text-lg text-indigo-600 dark:text-indigo-400">
+                                    ${getAssetNameById(item.assetId)} (${item.itemType})
+                                </div>
+                                <div class="text-sm ${item.completed || item.status === 'Concluído' ? 'line-through text-slate-500' : 'text-slate-700 dark:text-slate-300'}">
+                                    ${item.task}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 italic mt-1">
+                                    Responsável: ${item.responsible} | Tipo: ${item.type || item.serviceType} | Status: ${item.status || (item.completed ? 'Concluída' : 'Pendente')}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="window.toggleCompletion('${item.id}', ${item.completed || item.status === 'Concluído'}, '${item.itemType}')" class="p-2 rounded-full ${item.completed || item.status === 'Concluído' ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'} hover:scale-110 transform transition-transform duration-200" title="${item.completed || item.status === 'Concluído' ? 'Marcar como Incompleta' : 'Marcar como Concluída'}">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button onclick="window.deleteWorkItem('${item.id}', '${item.itemType}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Item">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhum item de trabalho adicionado ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+
+            const chartColors = [
+                '#4F46E5', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B'
+            ];
+
+            if (openChartLabels.length > 0) {
+                const ctxOpen = document.getElementById('os-open-chart').getContext('2d');
+                new Chart(ctxOpen, {
+                    type: 'pie',
+                    data: {
+                        labels: openChartLabels,
+                        datasets: [{
+                            data: openChartData,
+                            backgroundColor: chartColors,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    font: {
+                                        family: 'Inter'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (executedChartLabels.length > 0) {
+                const ctxExecuted = document.getElementById('os-executed-chart').getContext('2d');
+                new Chart(ctxExecuted, {
+                    type: 'pie',
+                    data: {
+                        labels: executedChartLabels,
+                        datasets: [{
+                            data: executedChartData,
+                            backgroundColor: chartColors,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    font: {
+                                        family: 'Inter'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        window.renderMyTasksPage = () => {
+            const pageContent = document.getElementById('page-content');
+            const filteredItems = Array.from(workItems.values()).filter(item => item.responsible === 'Técnico').filter(item => item.itemType === 'Tarefa');
+
+            const formHtml = `
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400">Minhas Tarefas</h2>
+                </div>
+            `;
+            
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+            ` + formHtml + `
+                <div class="divide-y divide-slate-200 dark:divide-slate-700" id="my-task-list">
+                    ${filteredItems.length > 0 ? filteredItems.map(item => `
+                        <div class="flex items-center justify-between py-4 px-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200">
+                            <div class="flex-1 min-w-0 pr-4">
+                                <div class="font-bold text-lg text-indigo-600 dark:text-indigo-400">
+                                    ${getAssetNameById(item.assetId)} (${item.itemType})
+                                </div>
+                                <div class="text-sm ${item.completed || item.status === 'Concluído' ? 'line-through text-slate-500' : 'text-slate-700 dark:text-slate-300'}">
+                                    ${item.task}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 italic mt-1">
+                                    Responsável: ${item.responsible} | Tipo: ${item.type || item.serviceType} | Status: ${item.status || (item.completed ? 'Concluída' : 'Pendente')}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="window.toggleCompletion('${item.id}', ${item.completed || item.status === 'Concluído'}, '${item.itemType}')" class="p-2 rounded-full ${item.completed || item.status === 'Concluído' ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'} hover:scale-110 transform transition-transform duration-200" title="${item.completed || item.status === 'Concluído' ? 'Marcar como Incompleta' : 'Marcar como Concluída'}">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhuma tarefa atribuída a você.
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        window.renderMyServiceOrdersPage = () => {
+            const pageContent = document.getElementById('page-content');
+            const filteredItems = Array.from(workItems.values()).filter(item => item.responsible === 'Técnico').filter(item => item.itemType === 'Ordem de Serviço');
+            
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400">Minhas Ordens de Serviço</h2>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    ${filteredItems.length > 0 ? filteredItems.map((order) => `
+                        <div class="bg-slate-50 dark:bg-slate-700 p-6 rounded-xl shadow-lg border-l-4 border-indigo-500 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300">OS N°: ${order.id.substring(0, 6)}...</h3>
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-full text-white ${getSoStatusColor(order.status)}">
+                                        ${order.status}
+                                    </span>
+                                </div>
+                                <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                                    <p><span class="font-medium">Cliente:</span> ${order.client}</p>
+                                    <p><span class="font-medium">Serviço:</span> ${order.task} (${order.serviceType})</p>
+                                    <p><span class="font-medium">Equipamento:</span> ${getAssetNameById(order.equipmentId)}</p>
+                                    <p><span class="font-medium">Responsável:</span> ${order.responsible}</p>
+                                    ${order.executionDate ? `
+                                    <p>
+                                        <span class="font-medium">Data de Execução:</span> ${new Date(order.executionDate.seconds * 1000).toLocaleString()}
+                                    </p>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="window.editSo('${order.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Ordem de Serviço">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button onclick="window.deleteServiceOrder('${order.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Ordem de Serviço">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button onclick="window.generatePdf(JSON.parse(atob('${btoa(JSON.stringify(order))}')))" class="p-2 rounded-full bg-teal-500 text-white hover:bg-teal-600 hover:scale-110 transform transition-transform duration-200" title="Gerar PDF">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhuma ordem de serviço atribuída a você.
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        window.renderTechnicianStopPage = () => {
+            const pageContent = document.getElementById('page-content');
+            
+            const stopHistory = Array.from(stops.values()).sort((a, b) => {
+                const dateA = a.createdAt.seconds;
+                const dateB = b.createdAt.seconds;
+                return dateB - dateA;
+            });
+            
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Registrar Parada de Manutenção</h2>
+
+                <div class="p-6 bg-slate-200 dark:bg-slate-700 rounded-xl shadow-inner mb-8">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Detalhes da Parada</h3>
+                    <form id="add-stop-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="col-span-full">
+                            <label for="stopAssetId" class="block text-sm font-medium mb-1">Ativo</label>
+                            <select id="stopAssetId" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required>
+                                <option value="" disabled selected>Selecione um ativo...</option>
+                                ${Array.from(assets.values()).map(asset => `<option value="${asset.id}">${asset.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-span-full">
+                            <label for="stopReason" class="block text-sm font-medium mb-1">Motivo da Parada</label>
+                            <input type="text" id="stopReason" placeholder="Ex: Manutenção Preventiva" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                        </div>
+                        <div class="col-span-full">
+                            <label for="stopClassificacao" class="block text-sm font-medium mb-1">Classificação da Parada</label>
+                            <select id="stopClassificacao" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required>
+                                <option value="" disabled selected>Selecione uma classificação...</option>
+                                <option value="Mecânica">Mecânica</option>
+                                <option value="Hidráulica">Hidráulica</option>
+                                <option value="Elétrica">Elétrica</option>
+                                <option value="Molde">Molde</option>
+                                <option value="Matéria-Prima">Matéria-Prima</option>
+                                <option value="Pneumática">Pneumática</option>
+                                <option value="Eletrônica">Eletrônica</option>
+                                <option value="Outros">Outros</option>
+                            </select>
+                        </div>
+                        <div class="col-span-1">
+                            <label for="stopStartDateTime" class="block text-sm font-medium mb-1">Início da Parada</label>
+                            <input type="datetime-local" id="stopStartDateTime" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                        </div>
+                        <div class="col-span-1">
+                            <label for="stopEndDateTime" class="block text-sm font-medium mb-1">Fim da Parada</label>
+                            <input type="datetime-local" id="stopEndDateTime" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                        </div>
+                        <div class="col-span-full flex justify-end">
+                            <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                                <i class="fas fa-plus"></i> Adicionar Parada
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <h3 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Histórico de Paradas</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${stopHistory.length > 0 ? stopHistory.map(item => {
+                        const itemDate = new Date(item.createdAt.seconds * 1000).toLocaleString();
+                        const assetName = getAssetNameById(item.assetId);
+                        
+                        return `
+                            <div class="bg-slate-50 dark:bg-slate-700 p-6 rounded-xl shadow-lg border-l-4 border-red-500 flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h3 class="text-xl font-semibold text-red-700 dark:text-red-300">Parada de Manutenção</h3>
+                                        <span class="px-3 py-1 text-xs font-semibold rounded-full text-white bg-red-500">Parada</span>
+                                    </div>
+                                    <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                                        <p><span class="font-medium">Motivo:</span> ${item.reason}</p>
+                                        <p><span class="font-medium">Classificação:</span> ${item.classificacao || 'N/A'}</p>
+                                        <p><span class="font-medium">Equipamento:</span> ${assetName}</p>
+                                        <p><span class="font-medium">Início:</span> ${new Date(item.startDateTime.seconds * 1000).toLocaleString()}</p>
+                                        <p><span class="font-medium">Fim:</span> ${new Date(item.endDateTime.seconds * 1000).toLocaleString()}</p>
+                                        <p><span class="font-medium">Duração:</span> ${item.durationHours} horas</p>
+                                        <p><span class="font-medium">Data de Registro:</span> ${itemDate}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhuma parada de manutenção registrada ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+            const addStopForm = document.getElementById('add-stop-form');
+            if (addStopForm) {
+                addStopForm.onsubmit = addStop;
+            }
+        };
+
+        window.renderAssetsPage = () => {
+            const pageContent = document.getElementById('page-content');
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <form id="add-asset-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    <div class="col-span-full">
+                        <label for="assetName" class="block text-sm font-medium mb-1">Nome do Ativo</label>
+                        <input type="text" id="assetName" placeholder="Ex: Prensa Hidráulica" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="assetType" class="block text-sm font-medium mb-1">Tipo</label>
+                        <input type="text" id="assetType" placeholder="Ex: Máquina Industrial" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="assetDepartment" class="block text-sm font-medium mb-1">Departamento</label>
+                        <input type="text" id="assetDepartment" placeholder="Ex: Usinagem" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-full">
+                        <label for="serialNumber" class="block text-sm font-medium mb-1">Número de Série</label>
+                        <input type="text" id="serialNumber" placeholder="Ex: SN-12345" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="severity" class="block text-sm font-medium mb-1">Severidade (1-10)</label>
+                        <input type="number" id="severity" min="1" max="10" value="1" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="occurrence" class="block text-sm font-medium mb-1">Ocorrência (1-10)</label>
+                        <input type="number" id="occurrence" min="1" max="10" value="1" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="detection" class="block text-sm font-medium mb-1">Detecção (1-10)</label>
+                        <input type="number" id="detection" min="1" max="10" value="1" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium mb-1">NPR</label>
+                        <div id="rpn-display" class="w-full px-4 py-2 bg-slate-300 dark:bg-slate-600 rounded-lg font-semibold text-slate-900 dark:text-slate-100">1</div>
+                    </div>
+                    <div class="col-span-full">
+                        <label for="assetImage" class="block text-sm font-medium mb-1">Imagem do Ativo</label>
+                        <input type="file" id="assetImage" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+                    </div>
+                    <div class="col-span-full flex justify-end">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Adicionar Ativo
+                        </button>
+                    </div>
+                </form>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${Array.from(assets.values()).length > 0 ? Array.from(assets.values()).map(asset => `
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-xl shadow-lg border-l-4 border-indigo-500 flex flex-col p-6 cursor-pointer transition-transform transform hover:scale-[1.01] duration-200" onclick="window.showAssetDetailsModal('${asset.id}')">
+                            <div class="flex items-center gap-4 mb-4">
+                                ${asset.imageUrl ? `<img src="${asset.imageUrl}" alt="${asset.name}" class="w-16 h-16 object-cover rounded-md">` : `<div class="w-16 h-16 flex items-center justify-center bg-slate-200 dark:bg-slate-600 rounded-md text-sm">Sem Foto</div>`}
+                                <h3 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300">${asset.name}</h3>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Tipo:</span> ${asset.type}</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Departamento:</span> ${asset.department}</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">NPR:</span> ${asset.rpn}</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-300"><span class="font-medium">Criticidade:</span> ${asset.criticality}</p>
+                            </div>
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="event.stopPropagation(); window.editAsset('${asset.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Ativo">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button onclick="event.stopPropagation(); window.deleteAsset('${asset.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Ativo">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhum ativo mapeado ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+            const addAssetForm = document.getElementById('add-asset-form');
+            if (addAssetForm) addAssetForm.onsubmit = addAsset;
+            const severityInput = document.getElementById('severity');
+            const occurrenceInput = document.getElementById('occurrence');
+            const detectionInput = document.getElementById('detection');
+            const rpnDisplay = document.getElementById('rpn-display');
+            
+            const updateRpnDisplay = () => {
+                const sev = parseInt(severityInput.value, 10);
+                const occ = parseInt(occurrenceInput.value, 10);
+                const det = parseInt(detectionInput.value, 10);
+                rpnDisplay.textContent = sev * occ * det;
+            };
+
+            if (severityInput) severityInput.oninput = updateRpnDisplay;
+            if (occurrenceInput) occurrenceInput.oninput = updateRpnDisplay;
+            if (detectionInput) detectionInput.oninput = updateRpnDisplay;
+        }
+
+        window.renderLtpPage = () => {
+            const pageContent = document.getElementById('page-content');
+            
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+            Date.prototype.getWeek = function() {
+                const date = new Date(this.getTime());
+                date.setHours(0, 0, 0, 0);
+                date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+                const week1 = new Date(date.getFullYear(), 0, 4);
+                return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+            };
+
+            const year = new Date().getFullYear();
+            let calendarHtml = '';
+            let currentWeek = new Date().getWeek();
+
+            for (let i = 0; i < 12; i++) {
+                const monthName = monthNames[i];
+                const firstDay = new Date(year, i, 1);
+                const lastDay = new Date(year, i + 1, 0);
+                const daysInMonth = lastDay.getDate();
+                const startDay = (firstDay.getDay() + 6) % 7;
+
+                // Adjust the current week calculation to reset at the start of each year
+                let currentMonthWeek = new Date(year, i, 1).getWeek();
+                if (i > 0 && currentMonthWeek < new Date(year, i - 1, 28).getWeek()) {
+                    currentMonthWeek = new Date(year, i, 1).getWeek();
+                }
+
+                calendarHtml += `
+                    <div class="bg-slate-100 dark:bg-slate-700 rounded-xl shadow-md p-4 flex flex-col items-center justify-between">
+                        <div class="w-full flex justify-between items-center mb-2">
+                             <div class="flex items-center">
+                                 <span class="bg-indigo-600 text-white rounded-full text-xs font-bold px-2 py-1">${currentMonthWeek}</span>
+                                 <h4 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 ml-2">${monthName} ${year}</h4>
+                             </div>
+                        </div>
+                        <div class="calendar-grid w-full">
+                            ${dayNames.map(day => `<div class="calendar-day-header">${day}</div>`).join('')}
+                            ${Array.from({ length: startDay }, () => `<div class="p-2"></div>`).join('')}
+                            ${Array.from({ length: daysInMonth }, (_, dayIndex) => {
+                                const day = dayIndex + 1;
+                                const date = new Date(year, i, day);
+                                const tasksForDay = Array.from(ltpPlans.values()).filter(plan => {
+                                    let interval;
+                                    switch (plan.frequency) {
+                                        case 'Semanal': interval = 1; break;
+                                        case 'Mensal': interval = 4; break;
+                                        case 'Trimestral': interval = 13; break;
+                                        case 'Semestral': interval = 26; break;
+                                        case 'Anual': interval = 52; break;
+                                        default: return false;
+                                    }
+                                    const weekNumber = date.getWeek();
+                                    return weekNumber === plan.initialWeek || (weekNumber - plan.initialWeek) % interval === 0 && weekNumber >= plan.initialWeek;
+                                });
+                                
+                                const taskDotsHtml = tasksForDay.map(task => `
+                                    <div class="task-dot-container">
+                                        <div class="task-dot" style="background-color: ${getAssetColor(task.assetId)};" title="${getAssetNameById(task.assetId)}"></div>
+                                    </div>
+                                `).join('');
+                                
+                                return `
+                                    <div class="text-sm border-2 border-transparent hover:border-indigo-500 rounded-lg relative flex flex-col justify-between items-center transition-colors duration-200 p-2 h-16" onclick="window.showWeeklyTasks(${date.getWeek()})">
+                                        <span class="font-bold">${day}</span>
+                                        <div class="flex flex-wrap justify-center gap-1 mt-1">
+                                            ${taskDotsHtml}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400">Planejamento Anual</h2>
+                    <div class="flex space-x-2 mt-4 sm:mt-0">
+                        <button onclick="window.showLtpForm()" class="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors shadow-md flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Adicionar Plano
+                        </button>
+                    </div>
+                </div>
+
+                <div id="ltp-form-container" class="mb-8 hidden">
+                    <form id="add-ltp-plan-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-6 bg-slate-200 dark:bg-slate-700 rounded-xl shadow-inner">
+                        <div class="col-span-full">
+                            <label for="ltpPlanName" class="block text-sm font-medium mb-1">Nome do Plano</label>
+                            <input type="text" id="ltpPlanName" placeholder="Ex: Plano de Calibração Anual" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                        </div>
+                        <div class="col-span-1 lg:col-span-2">
+                            <label for="ltpAssetId" class="block text-sm font-medium mb-1">Ativo</label>
+                            <select id="ltpAssetId" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                                <option value="" disabled selected>Selecione um ativo...</option>
+                                ${Array.from(assets.values()).map(asset => `<option value="${asset.id}">${asset.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-span-1 lg:col-span-1">
+                            <label for="ltpResponsible" class="block text-sm font-medium mb-1">Responsável</label>
+                            <select id="ltpResponsible" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                                <option value="" disabled selected>Selecione um profissional...</option>
+                                ${Array.from(professionals.values()).map(prof => `<option value="${prof.name}">${prof.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-span-1 lg:col-span-1">
+                            <label for="ltpInitialWeek" class="block text-sm font-medium mb-1">Semana Inicial</label>
+                            <input type="number" id="ltpInitialWeek" min="1" max="52" value="1" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                        </div>
+                        <div class="col-span-1 lg:col-span-1">
+                            <label for="ltpFrequency" class="block text-sm font-medium mb-1">Periodicidade</label>
+                            <select id="ltpFrequency" class="w-full px-4 py-2 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                                <option value="Semanal">Semanal</option>
+                                <option value="Mensal">Mensal</option>
+                                <option value="Trimestral">Trimestral</option>
+                                <option value="Semestral">Semestral</option>
+                                <option value="Anual">Anual</option>
+                            </select>
+                        </div>
+                        <div class="col-span-full flex justify-end space-x-4">
+                            <button type="button" onclick="window.hideLtpForm()" class="px-6 py-2 rounded-full font-semibold text-slate-700 bg-slate-300 hover:bg-slate-400 transition-colors">Cancelar</button>
+                            <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                                <i class="fas fa-plus"></i> Adicionar Plano
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div id="ltp-list-container" class="space-y-4 mb-8">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Planos Existentes</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${Array.from(ltpPlans.values()).length > 0 ? Array.from(ltpPlans.values()).map(plan => `
+                            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <h4 class="text-lg font-semibold text-slate-800 dark:text-slate-200">${plan.planName}</h4>
+                                    <p class="text-sm text-slate-600 dark:text-slate-300">Ativo: ${getAssetNameById(plan.assetId)} | Responsável: ${plan.responsible}</p>
+                                    <p class="text-sm text-slate-600 dark:text-slate-300">Frequência: ${plan.frequency} | Semana Inicial: ${plan.initialWeek}</p>
+                                </div>
+                                <div class="flex space-x-2 mt-4">
+                                    <button onclick="window.editLtpPlan('${plan.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Plano">
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button onclick="window.deleteLtpPlan('${plan.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Plano">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                    <button onclick="window.generateServiceOrderFromLTP(JSON.parse(atob('${btoa(JSON.stringify(plan))}')))" class="px-4 py-2 bg-green-500 text-white rounded-full text-sm hover:bg-green-600 transition-colors">
+                                        Gerar OS
+                                    </button>
+                                    <button onclick="window.generateTaskFromLTP(JSON.parse(atob('${btoa(JSON.stringify(plan))}')))" class="px-4 py-2 bg-indigo-500 text-white rounded-full text-sm hover:bg-indigo-600 transition-colors">
+                                        Gerar Tarefa
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('') : `
+                            <div class="text-center py-4 text-slate-500 dark:text-slate-400">
+                                Nenhum plano anual adicionado ainda.
+                            </div>
+                        `}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
+                    ${calendarHtml}
+                </div>
+                
+            `;
+            document.getElementById('add-ltp-plan-form').onsubmit = addLtpPlan;
+            const editLtpForm = document.getElementById('edit-ltp-form');
+            if(editLtpForm) {
+                editLtpForm.onsubmit = updateLtpPlan;
+            }
+        };
+        
+        window.showLtpForm = () => {
+            document.getElementById('ltp-form-container').classList.remove('hidden');
+        };
+
+        window.hideLtpForm = () => {
+            document.getElementById('ltp-form-container').classList.add('hidden');
+        };
+        
+        window.renderServiceOrdersPage = () => {
+            const pageContent = document.getElementById('page-content');
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <form id="add-so-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="col-span-1 lg:col-span-2">
+                        <label for="soClient" class="block text-sm font-medium mb-1">Cliente</label>
+                        <input type="text" id="soClient" placeholder="Ex: Cliente A" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1 lg:col-span-2">
+                        <label for="soService" class="block text-sm font-medium mb-1">Serviço</label>
+                        <input type="text" id="soService" placeholder="Ex: Ajuste de correia" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1 lg:col-span-2">
+                        <label for="soEquipmentId" class="block text-sm font-medium mb-1">Equipamento</label>
+                        <select id="soEquipmentId" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                            <option value="" disabled selected>Selecione um equipamento...</option>
+                            ${Array.from(assets.values()).map(asset => `<option value="${asset.id}">${asset.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="soServiceType" class="block text-sm font-medium mb-1">Tipo de Serviço</label>
+                        <select id="soServiceType" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                            <option value="Preventiva">Preventiva</option>
+                            <option value="Corretiva">Corretiva</option>
+                            <option value="Preditiva">Preditiva</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="soResponsible" class="block text-sm font-medium mb-1">Técnico Responsável</label>
+                        <select id="soResponsible" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                            <option value="" disabled selected>Selecione um profissional...</option>
+                            ${Array.from(professionals.values()).map(prof => `<option value="${prof.name}">${prof.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="soStatus" class="block text-sm font-medium mb-1">Status</label>
+                        <select id="soStatus" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                            <option value="Aberto" selected>Aberto</option>
+                            <option value="Em execução">Em execução</option>
+                            <option value="Concluído">Concluído</option>
+                        </select>
+                    </div>
+                    <div class="col-span-full">
+                        <label for="soExecutionDateTime" class="block text-sm font-medium mb-1">Data e Hora de Execução</label>
+                        <input type="datetime-local" id="soExecutionDateTime" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-full flex justify-end">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Adicionar Ordem de Serviço
+                        </button>
+                    </div>
+                </form>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço').length > 0 ? Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço').map((order) => `
+                        <div class="bg-slate-50 dark:bg-slate-700 p-6 rounded-xl shadow-lg border-l-4 border-indigo-500 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300">OS N°: ${order.id.substring(0, 6)}...</h3>
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-full text-white ${getSoStatusColor(order.status)}">
+                                        ${order.status}
+                                    </span>
+                                </div>
+                                <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                                    <p><span class="font-medium">Cliente:</span> ${order.client}</p>
+                                    <p><span class="font-medium">Serviço:</span> ${order.task} (${order.serviceType})</p>
+                                    <p><span class="font-medium">Equipamento:</span> ${getAssetNameById(order.equipmentId)}</p>
+                                    <p><span class="font-medium">Responsável:</span> ${order.responsible}</p>
+                                    ${order.executionDate ? `
+                                    <p>
+                                        <span class="font-medium">Data de Execução:</span> ${new Date(order.executionDate.seconds * 1000).toLocaleString()}
+                                    </p>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="window.editSo('${order.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Ordem de Serviço">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button onclick="window.deleteServiceOrder('${order.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Ordem de Serviço">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button onclick="window.generatePdf(JSON.parse(atob('${btoa(JSON.stringify(order))}')))" class="p-2 rounded-full bg-teal-500 text-white hover:bg-teal-600 hover:scale-110 transform transition-transform duration-200" title="Gerar PDF">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhuma ordem de serviço adicionada ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+            const addSoForm = document.getElementById('add-so-form');
+            if(addSoForm) addSoForm.onsubmit = addServiceOrder;
+        }
+        
+        window.renderContinuousImprovementPage = () => {
+            const pageContent = document.getElementById('page-content');
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Melhoria Contínua (Checklist de Auditoria)</h2>
+                <!-- Formulário para Adicionar Item -->
+                <form id="add-ci-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    <div class="col-span-full">
+                        <label for="ciRequirement" class="block text-sm font-medium mb-1">Requisito do Checklist</label>
+                        <input type="text" id="ciRequirement" placeholder="Ex: Análise de risco (APP) realizada" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="ciStatus" class="block text-sm font-medium mb-1">Situação</label>
+                        <select id="ciStatus" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100">
+                            <option value="Conforme">Conforme</option>
+                            <option value="Não Conforme">Não Conforme</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="ciComments" class="block text-sm font-medium mb-1">Comentários</label>
+                        <input type="text" id="ciComments" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="ciActions" class="block text-sm font-medium mb-1">Ações Necessárias</label>
+                        <input type="text" id="ciActions" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="ciResponsible" class="block text-sm font-medium mb-1">Responsável</label>
+                        <input type="text" id="ciResponsible" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                    </div>
+                    <div class="col-span-full">
+                        <label for="ciDeadline" class="block text-sm font-medium mb-1">Prazo</label>
+                        <input type="text" id="ciDeadline" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                    </div>
+                    <div class="col-span-full flex justify-end">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Adicionar Item
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Lista de Itens do Checklist -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${ciChecklist.size > 0 ? Array.from(ciChecklist.values()).map(item => `
+                        <div class="bg-slate-50 dark:bg-slate-700 p-6 rounded-xl shadow-lg border-l-4 border-indigo-500 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300 mb-2">${item.requirement}</h3>
+                                <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                                    <p><span class="font-medium">Situação:</span> ${item.status}</p>
+                                    <p><span class="font-medium">Comentários:</span> ${item.comments || 'N/A'}</p>
+                                    <p><span class="font-medium">Ações:</span> ${item.actions || 'N/A'}</p>
+                                    <p><span class="font-medium">Responsável:</span> ${item.responsible}</p>
+                                    <p><span class="font-medium">Prazo:</span> ${item.deadline}</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="window.editCiChecklistItem('${item.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Item">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button onclick="window.deleteCiChecklistItem('${item.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Item">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhum item de checklist adicionado ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+            const addCiForm = document.getElementById('add-ci-form');
+            if (addCiForm) addCiForm.onsubmit = addCiChecklistItem;
+        }
+
+        window.renderPeoplePage = () => {
+            const pageContent = document.getElementById('page-content');
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Gestão de Pessoas</h2>
+                
+                <!-- Formulário para Adicionar Pessoa -->
+                <form id="add-professional-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    <div class="col-span-full">
+                        <label for="professionalName" class="block text-sm font-medium mb-1">Nome do Profissional</label>
+                        <input type="text" id="professionalName" placeholder="Ex: João Silva" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="professionalDepartment" class="block text-sm font-medium mb-1">Departamento</label>
+                        <input type="text" id="professionalDepartment" placeholder="Ex: Manutenção" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required />
+                    </div>
+                    <div class="col-span-1">
+                        <label for="professionalSpecialization" class="block text-sm font-medium mb-1">Especialização</label>
+                        <select id="professionalSpecialization" class="w-full px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow text-slate-900 dark:text-slate-100" required>
+                            <option value="" disabled selected>Selecione a especialização...</option>
+                            <option value="Mecânica">Mecânica</option>
+                            <option value="Elétrica">Elétrica</option>
+                            <option value="Hidráulica">Hidráulica</option>
+                            <option value="Eletrônica">Eletrônica</option>
+                        </select>
+                    </div>
+                    <div class="col-span-full flex justify-end">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Adicionar Profissional
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Lista de Profissionais -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${professionals.size > 0 ? Array.from(professionals.values()).map(professional => `
+                        <div class="bg-slate-50 dark:bg-slate-700 p-6 rounded-xl shadow-lg border-l-4 border-indigo-500 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-xl font-semibold text-indigo-700 dark:text-indigo-300 mb-2">${professional.name}</h3>
+                                <div class="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                                    <p><span class="font-medium">Departamento:</span> ${professional.department}</p>
+                                    <p><span class="font-medium">Especialização:</span> ${professional.specialization}</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="window.editProfessional('${professional.id}')" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 hover:scale-110 transform transition-transform duration-200" title="Editar Profissional">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button onclick="window.deleteProfessional('${professional.id}')" class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 hover:scale-110 transform transition-transform duration-200" title="Excluir Profissional">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                            Nenhum profissional cadastrado ainda.
+                        </div>
+                    `}
+                </div>
+            `;
+            const addProfessionalForm = document.getElementById('add-professional-form');
+            if (addProfessionalForm) addProfessionalForm.onsubmit = addProfessional;
+        };
+
+        window.renderIndicatorsPage = () => {
+            const pageContent = document.getElementById('page-content');
+            
+            const totalOrders = Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço').length;
+            const completedOrders = Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço' && item.status === 'Concluído').length;
+            const totalAssets = assets.size;
+            const assetCriticality = {
+                'Baixa': 0,
+                'Média': 0,
+                'Alta': 0
+            };
+            assets.forEach(asset => {
+                if (asset.criticality) {
+                    assetCriticality[asset.criticality] = (assetCriticality[asset.criticality] || 0) + 1;
+                }
+            });
+
+            const ordersByType = {};
+            Array.from(workItems.values()).filter(item => item.itemType === 'Ordem de Serviço').forEach(order => {
+                ordersByType[order.serviceType] = (ordersByType[order.serviceType] || 0) + 1;
+            });
+            
+            let mttrValue = 'N/A';
+            let mtbfValue = 'N/A';
+            
+            const allStops = Array.from(stops.values());
+            if (allStops.length > 0) {
+                const totalDowntimeMs = allStops.reduce((sum, stop) => sum + (stop.endDateTime.toMillis() - stop.startDateTime.toMillis()), 0);
+                mttrValue = (totalDowntimeMs / (1000 * 60 * 60 * allStops.length)).toFixed(2);
+            }
+
+            if (allStops.length > 1) {
+                const sortedStops = allStops.sort((a, b) => a.startDateTime.toMillis() - b.startDateTime.toMillis());
+                let totalOperatingTimeMs = 0;
+                for (let i = 1; i < sortedStops.length; i++) {
+                    totalOperatingTimeMs += (sortedStops[i].startDateTime.toMillis() - sortedStops[i-1].endDateTime.toMillis());
+                }
+                mtbfValue = (totalOperatingTimeMs / (1000 * 60 * 60 * (allStops.length - 1))).toFixed(2);
+            }
+            
+            // Gráfico de Pareto 1: Motivos de Parada
+            const stopReasons = {};
+            let totalStopReasonsCount = 0;
+            allStops.forEach(stop => {
+                const reason = stop.reason || 'Motivo Desconhecido';
+                stopReasons[reason] = (stopReasons[reason] || 0) + 1;
+                totalStopReasonsCount++;
+            });
+            const sortedStopReasons = Object.entries(stopReasons)
+                .sort(([, a], [, b]) => b - a)
+                .map(([reason, count]) => ({ reason, count }));
+            let cumulativeCountReasons = 0;
+            const paretoLabelsReasons = [];
+            const paretoCountsReasons = [];
+            const paretoCumulativeReasons = [];
+            sortedStopReasons.forEach(item => {
+                paretoLabelsReasons.push(item.reason);
+                paretoCountsReasons.push(item.count);
+                cumulativeCountReasons += item.count;
+                paretoCumulativeReasons.push((cumulativeCountReasons / totalStopReasonsCount) * 100);
+            });
+            const paretoChartReasonsHtml = sortedStopReasons.length > 0 ? `
+                <div class="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-6">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Análise de Pareto - Motivos de Parada</h3>
+                    <div class="h-80">
+                        <canvas id="pareto-reasons-chart"></canvas>
+                    </div>
+                </div>
+            ` : `
+                <div class="p-6 bg-slate-50 dark:bg-slate-700 rounded-2xl shadow-xl text-center">
+                    <p class="text-slate-500 dark:text-slate-400">Nenhuma parada de manutenção registrada para análise por motivo.</p>
+                </div>
+            `;
+            
+            // Gráfico de Pareto 2: Ativos com Mais Paradas
+            const stopsByAsset = {};
+            let totalStopsByAssetCount = 0;
+            allStops.forEach(stop => {
+                const assetName = getAssetNameById(stop.assetId);
+                stopsByAsset[assetName] = (stopsByAsset[assetName] || 0) + 1;
+                totalStopsByAssetCount++;
+            });
+            const sortedStopsByAsset = Object.entries(stopsByAsset)
+                .sort(([, a], [, b]) => b - a)
+                .map(([assetName, count]) => ({ assetName, count }));
+            let cumulativeCountAssets = 0;
+            const paretoLabelsAssets = [];
+            const paretoCountsAssets = [];
+            const paretoCumulativeAssets = [];
+            sortedStopsByAsset.forEach(item => {
+                paretoLabelsAssets.push(item.assetName);
+                paretoCountsAssets.push(item.count);
+                cumulativeCountAssets += item.count;
+                paretoCumulativeAssets.push((cumulativeCountAssets / totalStopsByAssetCount) * 100);
+            });
+            const paretoChartAssetsHtml = sortedStopsByAsset.length > 0 ? `
+                <div class="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-6">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Análise de Pareto - Ativos com Mais Paradas</h3>
+                    <div class="h-80">
+                        <canvas id="pareto-assets-chart"></canvas>
+                    </div>
+                </div>
+            ` : `
+                <div class="p-6 bg-slate-50 dark:bg-slate-700 rounded-2xl shadow-xl text-center">
+                    <p class="text-slate-500 dark:text-slate-400">Nenhuma parada de manutenção registrada para análise por ativo.</p>
+                </div>
+            `;
+
+            // Gráfico de Pareto 3: Classificação das Paradas
+            const stopClassificacao = {};
+            let totalStopClassificacaoHours = 0;
+            allStops.forEach(stop => {
+                const classificacao = stop.classificacao || 'Classificação Desconhecida';
+                const duration = parseFloat(stop.durationHours);
+                if (!isNaN(duration)) {
+                    stopClassificacao[classificacao] = (stopClassificacao[classificacao] || 0) + duration;
+                    totalStopClassificacaoHours += duration;
+                }
+            });
+            const sortedStopClassificacao = Object.entries(stopClassificacao)
+                .sort(([, a], [, b]) => b - a)
+                .map(([classificacao, duration]) => ({ classificacao, duration }));
+            let cumulativeHoursClassificacao = 0;
+            const paretoLabelsClassificacao = [];
+            const paretoHoursClassificacao = [];
+            const paretoCumulativeClassificacao = [];
+            sortedStopClassificacao.forEach(item => {
+                paretoLabelsClassificacao.push(item.classificacao);
+                paretoHoursClassificacao.push(item.duration);
+                cumulativeHoursClassificacao += item.duration;
+                paretoCumulativeClassificacao.push((cumulativeHoursClassificacao / totalStopClassificacaoHours) * 100);
+            });
+
+            const paretoChartClassificacaoHtml = sortedStopClassificacao.length > 0 ? `
+                <div class="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-6">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Análise de Pareto - Classificação das Paradas (Duração em Horas)</h3>
+                    <div class="h-80">
+                        <canvas id="pareto-classificacao-chart"></canvas>
+                    </div>
+                </div>
+            ` : `
+                <div class="p-6 bg-slate-50 dark:bg-slate-700 rounded-2xl shadow-xl text-center">
+                    <p class="text-slate-500 dark:text-slate-400">Nenhuma parada de manutenção registrada para análise por classificação.</p>
+                </div>
+            `;
+
+            pageContent.innerHTML = `
+                <div class="mb-8 p-6 bg-slate-100 dark:bg-slate-700 rounded-2xl shadow-inner">
+                    <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">Objetivo da Página</h3>
+                    <p class="text-slate-600 dark:text-slate-300">
+                        ${pageDescriptions[currentPage]}
+                    </p>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Indicadores de Manutenção</h2>
+
+                <!-- Main Indicators -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-indigo-100 dark:bg-indigo-900 p-6 rounded-2xl shadow-lg">
+                        <div class="text-lg font-medium text-indigo-800 dark:text-indigo-200">Ordens de Serviço Concluídas</div>
+                        <div class="mt-2 text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">${completedOrders}</div>
+                        <div class="text-sm text-indigo-700 dark:text-indigo-300">Total de OS: ${totalOrders}</div>
+                    </div>
+                    <div class="bg-green-100 dark:bg-green-900 p-6 rounded-2xl shadow-lg">
+                        <div class="text-lg font-medium text-green-800 dark:text-green-200">Total de Ativos</div>
+                        <div class="mt-2 text-4xl font-extrabold text-green-600 dark:text-green-400">${totalAssets}</div>
+                        <div class="text-sm text-green-700 dark:text-green-300">Ativos no inventário</div>
+                    </div>
+                    <div class="bg-yellow-100 dark:bg-yellow-900 p-6 rounded-2xl shadow-lg">
+                        <div class="text-lg font-medium text-yellow-800 dark:text-yellow-200">TMEF (MTBF)</div>
+                        <div class="mt-2 text-4xl font-extrabold text-yellow-600 dark:text-yellow-400">${mtbfValue}h</div>
+                        <div class="text-sm text-yellow-700 dark:text-yellow-300">Tempo Médio Entre Falhas</div>
+                    </div>
+                    <div class="bg-red-100 dark:bg-red-900 p-6 rounded-2xl shadow-lg">
+                        <div class="text-lg font-medium text-red-800 dark:text-red-200">TMPR (MTTR)</div>
+                        <div class="mt-2 text-4xl font-extrabold text-red-600 dark:text-red-400">${mttrValue}h</div>
+                        <div class="text-sm text-red-700 dark:text-red-300">Tempo Médio para Reparo</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-6">
+                        <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Ordens de Serviço por Tipo</h3>
+                        <div class="h-80">
+                            <canvas id="orders-by-type-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-6">
+                        <h3 class="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Criticidade dos Ativos</h3>
+                        <div class="h-80">
+                            <canvas id="asset-criticality-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    ${paretoChartReasonsHtml}
+                    ${paretoChartAssetsHtml}
+                </div>
+                <div class="mt-6 grid grid-cols-1 gap-6">
+                    ${paretoChartClassificacaoHtml}
+                </div>
+            `;
+            
+            const chartColors = ['#4F46E5', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EAB308'];
+
+            const ordersByTypeCtx = document.getElementById('orders-by-type-chart');
+            if (ordersByTypeCtx) {
+                new Chart(ordersByTypeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(ordersByType),
+                        datasets: [{
+                            label: 'Número de Ordens de Serviço',
+                            data: Object.values(ordersByType),
+                            backgroundColor: chartColors,
+                            borderColor: chartColors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const assetCriticalityCtx = document.getElementById('asset-criticality-chart');
+            if (assetCriticalityCtx) {
+                new Chart(assetCriticalityCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(assetCriticality),
+                        datasets: [{
+                            data: Object.values(assetCriticality),
+                            backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    font: { family: 'Inter' }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const paretoReasonsCtx = document.getElementById('pareto-reasons-chart');
+            if (paretoReasonsCtx && sortedStopReasons.length > 0) {
+                new Chart(paretoReasonsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: paretoLabelsReasons,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: 'Número de Paradas',
+                                data: paretoCountsReasons,
+                                backgroundColor: '#3B82F6',
+                                borderColor: '#3B82F6',
+                                borderWidth: 1,
+                                yAxisID: 'y',
+                            },
+                            {
+                                type: 'line',
+                                label: 'Acumulado (%)',
+                                data: paretoCumulativeReasons,
+                                borderColor: '#EF4444',
+                                backgroundColor: '#EF4444',
+                                fill: false,
+                                yAxisID: 'y1',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Número de Paradas',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Acumulado (%)',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    callback: function(value) { return value + '%'; }
+                                },
+                                grid: { drawOnChartArea: false }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const paretoAssetsCtx = document.getElementById('pareto-assets-chart');
+            if (paretoAssetsCtx && sortedStopsByAsset.length > 0) {
+                 new Chart(paretoAssetsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: paretoLabelsAssets,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: 'Número de Paradas',
+                                data: paretoCountsAssets,
+                                backgroundColor: '#10B981',
+                                borderColor: '#10B981',
+                                borderWidth: 1,
+                                yAxisID: 'y',
+                            },
+                            {
+                                type: 'line',
+                                label: 'Acumulado (%)',
+                                data: paretoCumulativeAssets,
+                                borderColor: '#F59E0B',
+                                backgroundColor: '#F59E0B',
+                                fill: false,
+                                yAxisID: 'y1',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Número de Paradas',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Acumulado (%)',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    callback: function(value) { return value + '%'; }
+                                },
+                                grid: { drawOnChartArea: false }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const paretoClassificacaoCtx = document.getElementById('pareto-classificacao-chart');
+            if (paretoClassificacaoCtx && sortedStopClassificacao.length > 0) {
+                new Chart(paretoClassificacaoCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: paretoLabelsClassificacao,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: 'Duração Total (horas)',
+                                data: paretoHoursClassificacao,
+                                backgroundColor: '#10B981',
+                                borderColor: '#10B981',
+                                borderWidth: 1,
+                                yAxisID: 'y',
+                            },
+                            {
+                                type: 'line',
+                                label: 'Acumulado (%)',
+                                data: paretoCumulativeClassificacao,
+                                borderColor: '#F59E0B',
+                                backgroundColor: '#F59E0B',
+                                fill: false,
+                                yAxisID: 'y1',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Duração Total (horas)',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937' },
+                                grid: { color: 'rgba(200, 200, 200, 0.1)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Acumulado (%)',
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937',
+                                    callback: function(value) { return value + '%'; }
+                                },
+                                grid: { drawOnChartArea: false }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#1F2937'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        window.renderPageContent = () => {
+            const pageContent = document.getElementById('page-content');
+            pageContent.innerHTML = '';
+            switch (currentPage) {
+                case 'tarefas':
+                    window.renderTasksPage();
+                    break;
+                case 'ativos':
+                    window.renderAssetsPage();
+                    break;
+                case 'planejamento-anual':
+                    window.renderLtpPage();
+                    break;
+                case 'ordens-de-serviço':
+                    window.renderServiceOrdersPage();
+                    break;
+                case 'melhoria-contínua':
+                    window.renderContinuousImprovementPage();
+                    break;
+                case 'pessoas':
+                    window.renderPeoplePage();
+                    break;
+                case 'indicadores':
+                    window.renderIndicatorsPage();
+                    break;
+                case 'registrar-parada':
+                    window.renderTechnicianStopPage();
+                    break;
+                case 'minhas-tarefas':
+                    window.renderMyTasksPage();
+                    break;
+                case 'minhas-os':
+                    window.renderMyServiceOrdersPage();
+                    break;
+                default:
+                    pageContent.innerHTML = '<div class="text-center py-8 text-slate-500">Selecione uma página.</div>';
+            }
+        };
+
+        window.renderApp = () => {
+            window.renderNav();
+            window.renderPageContent();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initFirebase();
+            
+            const closeActionModalBtn = document.getElementById('close-action-modal');
+            if (closeActionModalBtn) {
+                closeActionModalBtn.onclick = () => {
+                    document.getElementById('action-feedback-modal').classList.add('hidden');
+                };
+            }
+            const closeEmailModalBtn = document.getElementById('close-email-modal');
+            if (closeEmailModalBtn) closeEmailModalBtn.onclick = () => {
+                document.getElementById('email-sent-modal').classList.add('hidden');
+            };
+
+            const editAssetForm = document.getElementById('edit-asset-form');
+            if (editAssetForm) editAssetForm.onsubmit = updateAsset;
+            const cancelEditAssetBtn = document.getElementById('cancel-edit-asset');
+            if (cancelEditAssetBtn) cancelEditAssetBtn.onclick = () => document.getElementById('edit-asset-modal').classList.add('hidden');
+
+            const editSoForm = document.getElementById('edit-so-form');
+            if (editSoForm) editSoForm.onsubmit = updateSo;
+            const cancelEditSoBtn = document.getElementById('cancel-edit-so');
+            if (cancelEditSoBtn) cancelEditSoBtn.onclick = () => document.getElementById('edit-so-modal').classList.add('hidden');
+            
+            const editLtpForm = document.getElementById('edit-ltp-form');
+            if (editLtpForm) editLtpForm.onsubmit = updateLtpPlan;
+            const cancelEditLtpBtn = document.getElementById('cancel-edit-ltp');
+            if (cancelEditLtpBtn) cancelEditLtpBtn.onclick = () => document.getElementById('edit-ltp-modal').classList.add('hidden');
+            
+            const editCiForm = document.getElementById('edit-ci-form');
+            if (editCiForm) editCiForm.onsubmit = updateCiChecklistItem;
+            const cancelEditCiBtn = document.getElementById('cancel-edit-ci');
+            if (cancelEditCiBtn) cancelEditCiBtn.onclick = () => document.getElementById('edit-ci-modal').classList.add('hidden');
+            
+            const editProfessionalForm = document.getElementById('edit-professional-form');
+            if (editProfessionalForm) editProfessionalForm.onsubmit = updateProfessional;
+            const cancelEditProfessionalBtn = document.getElementById('cancel-edit-professional');
+            if (cancelEditProfessionalBtn) cancelEditProfessionalBtn.onclick = () => document.getElementById('edit-professional-modal').classList.add('hidden');
+
+            const closeWeeklyTasksModalBtn = document.getElementById('close-weekly-tasks-modal');
+            if (closeWeeklyTasksModalBtn) closeWeeklyTasksModalBtn.onclick = () => document.getElementById('weekly-tasks-modal').classList.add('hidden');
+
+            const closeAssetDetailsModalBtn = document.getElementById('close-asset-details-modal');
+            if (closeAssetDetailsModalBtn) closeAssetDetailsModalBtn.onclick = () => document.getElementById('asset-details-modal').classList.add('hidden');
+
+            const roleSelector = document.getElementById('role-selector');
+            if (roleSelector) {
+                roleSelector.onchange = (e) => {
+                    userRole = e.target.value;
+                    if (userRole === 'tecnico') {
+                        currentPage = 'minhas-tarefas';
+                    } else {
+                        currentPage = 'tarefas';
+                    }
+                    window.renderApp();
+                };
+            }
+        });
+    </script>
+</body>
+</html>
